@@ -1,0 +1,455 @@
+---
+title: "Bellabeat Project"
+author: "Ciby Lin"
+date: "`r Sys.Date()`"
+output: html_document
+---
+```{r load-packages, include=FALSE}
+library(tidyverse)
+library(dplyr)
+library(magrittr)
+library(knitr)
+```
+### Scenario
+Bellabeat is a high-tech company specializes in  health-focused products for women. Bellabeat have been sucessful and want to measure their potential to become a larger player in the global smart device market against other non-Bellabeat products. Urška Sršen is the cofounder and Chief Creative Officer of Bellabeat. We will be analyzing smart device data to form new insights on how consumers are using their smart devices. The insights discovered will then help guide marketing strategy for the company. 
+
+## Ask 
+**Business Task**: Form productive marketing strategies by examing Fitbit device user behavior through different aspects to help Bellabeat become a global player in the high-tech industry.
+
+Primary stakeholder(s):Urška Sršen, Sando Mur, and executive team members.
+
+Secondary stakeholder(s): Bellabeat Marketing Team.
+
+- Here are the questions we are answering:
+1. What are some trends in smart device usage?
+2. How could these trends apply to Bellabeat customers?
+3. How could these trends help influence Bellabeat marketing strategy？
+
+
+## Prepare
+**Data source:**
+
+1. 30 participants FitBit Fitness Tracker Data from Mobius: <https://www.kaggle.com/arashnic/fitbit>
+2. Fitness Trackers Products Ecommerce Dataset:  <https://www.kaggle.com/datasets/devsubhash/fitness-trackers-products-ecommerce>
+
+**Data validation:**
+
+*Reliable*: The data are collected by surveying 30 eligible FitBit users through Amazon Mechanical Turk. Each participant consent to the collection of their personal tracker data and was de-identified with an unique study ID. The Fitness Trakcers Product Ecommerce Dataset has been collected from an e-commerce website (Flipkart) using webscraping technique in the Indian market. The dataset includes 565 samples with 11 attributes. 
+
+*Original*: Both datasets are secondary source data, since results are directly reported by the users and edited by the publishers of the datasets.
+
+*Comprehensive*: Each column has a label that gives the content in the row. Dates were given in the conventional format and every value were given in metrics that are reasonable and familiar to the analyst.
+
+*Cited*: Both dataset were labeled with their source and collection method. However, Fitness Trackers Products Ecommerce Dataset did not have the information on when it was collected.
+
+*Current*: The Fitbit Fitness Tracker Data were collected between 03.12.2016-05.12.2016. Missing dates from Fitness Trackers Products Ecommerce Dataset.
+
+**Data limitation:**
+
+- FitBit Fitness Tracker Data has only 30 participants in total. It fulfills the central limit theorom general rule of n>=30 but a larger sample size is preferred and if time allows we could survey more users. 
+- Not all 30 users recorded or self-reported for WeightLog, Sleep, Steps, and Calories dataset, which makes the sample size even smaller and could cause bias. 
+- For the users recorded in WeightLog, 5 users manually entered their weight and 3 recorded via a connected wifi device.
+- The samples in the Fitness Trackers Products Ecommerce Dataset only from Indian and it failed to recognize the other countries in the world. If allowed, more dataset from different countries are preferred.
+- Both dataset were secondary source data, thus potential errors could be introduced by the editor/publisher of the dataset. 
+
+## Process
+### Examing Daily Steps per Day
+
+```{r include=FALSE}
+steps_day <- read_csv("DailySteps_merged_v2.csv")
+```
+Transformed ActivityDay from character to date while formatting into MM/DD/YY.
+```{r echo=TRUE}
+head(as.Date(steps_day$ActivityDay,format="%m%d%y"))
+
+```
+```{r}
+data<-head(steps_day, 10)
+knitr::kable(data,
+ caption = "StepTotal Table")
+```
+Ordering ActivityDay in ascending order so the dates and resulting data are in chronological order when plotted. Then we grouped the StepTotal by dates and find the avergae steps per day while keeping the arrnagement in ascending order.
+```{r echo=TRUE}
+
+
+new_steps_day <- steps_day %>% group_by(ActivityDay) %>% summarize(mean_step = mean(StepTotal))
+print(new_steps_day) %>%  arrange(ActivityDay)
+
+data<-head(new_steps_day, 10)
+knitr::kable(data,
+ caption = "Average Daily Steps Table")
+```
+Since there are duplicated ActivityDates in the long table, we group StepTotal by same ActivityDay and find the average of the steps. 
+StepTotal were not grouped by duplicated Ids because the results need to include and combine the average step counts among all 33 participants (checked with n_distinct()). 
+In the "new_steps_day" data frame, the mean/average of StepTotal of all participants grouped by the same dates were founded and put into Daily Steps Table by processing the data frame with a combination of summarise, group_by, and mean functions.
+
+### Examing Calories Dataset
+ActivityDay was transformed from character to date and formatted in MM/DD/YY format. Then only the zeros were removed, no NAs were detected in the dataset to remove. After removing the zeros we find the summary of the dataset and found the minimun being 52 calories which is much smaller than the first quartile 1834, so we removed any values that are smaller than the first quartile. Assuming some participants forgot to report all of their consumed calories per day and caused the two-digit values. Lastly, the dates were put in an ascending order so it's prepared for visualization. 
+```{r include=FALSE}
+calories <- read_csv("DailyCalories_v2.csv")
+```
+```{r}
+head(as.Date(calories$ActivityDay,format="%m%d%y"))
+```
+```{r}
+calories_cleaned <- calories %>% filter(Calories !=0, Calories > 1834) %>% 
+  arrange(ActivityDay)
+
+```
+Average Calories were grouped by the same dates first then devided among the dates and fitlered by the first quartile to avoid the huge dip at the end of the graph caused by any outliers, then we turned the results into the Calories table.
+```{r}
+new_calories<- calories_cleaned %>% group_by(ActivityDay) %>% 
+  summarize(mean_calorie=mean(Calories)) %>% filter(mean_calorie > 2285)
+
+knitr::kable(head(new_calories, 10),
+ caption = "Average Calories")
+
+```
+### Examing Acitivty Intensity Dataset
+
+```{r include=FALSE}
+Intensity <- read_csv("DailyActIntensity_v2.csv")
+```
+
+Preparing data to create two types of visualizations: layered line chart and pie chart.
+use Activity Minutes instead of Distance to investigate because minute has higher temporal resolution than distance and help avoid ambiguity.
+```{r include=FALSE}
+intensity <- select(Intensity, ActivityDay, SedentaryMinutes, LightlyActiveMinutes, FairlyActiveMinutes, VeryActiveMinutes)
+```
+To find the average Activity Minutes of each intensity: 
+```{r}
+new_intensity <- intensity %>% group_by(ActivityDay) %>% summarize(mean_sit_min=mean(SedentaryMinutes), 
+  mean_lit_min=mean(LightlyActiveMinutes), mean_fair_min=mean(FairlyActiveMinutes),
+  mean_act_min=mean(VeryActiveMinutes))
+```
+
+```{r}
+data <- head(new_intensity,10)
+knitr::kable(data,
+ caption = "Average Active Minutes for each Intensity")
+```
+
+
+### Examing WeightLog Dataset
+```{r include=FALSE}
+weight <- read_csv("WeightLog.csv") 
+```
+Removed one outlier of BMI because there were 67 measurements, which is still enough for us to see a trend in the dataset after removing one outlier. We removed the outlier that is greater than the third quartile (37.2).
+```{r}
+quartile<- weight %>% summarize(mean_bmi=mean(BMI))*1.5
+weight<-filter(weight, BMI< 30)
+```
+Cleaned and simplified the data by grouping by date and find the average weights and BMI from the dataset, then turn the results into a table:
+```{r}
+new_weight <- weight %>% group_by(DATE) %>% summarize(mean_kg=mean(WeightKg),
+mean_pounds=mean(WeightPds), mean_BMI=mean(BMI)) 
+data <- head(new_weight, 10)
+knitr::kable(data,
+ caption = "Average Weight and BMI")
+```
+
+
+### Examning DailySleep Dataset
+```{r include=FALSE}
+sleep_day <- read_csv("DailySleep_8.24.22.csv")
+```
+sleep_day dataframe was grouped by same dates and used the mean() function to find the average TotalMinutesSleep and avergae TotalTimeInBed, then arranged the results into Average Minutes of Sleep table.
+```{r}
+new_sleep <- sleep_day %>% 
+  group_by(DATE) %>%
+  summarize(mean_asleep=mean(TotalMinutesSleep),
+            mean_inbed=mean(TotalTimeInBed))
+data<- head(new_sleep, 10)
+  knitr::kable(data, caption="Average Minutes of Sleep")
+```
+
+
+### Examing Fitness Tracker Dataset
+```{r include=FALSE}
+fit_tracker <- read_csv("fitness_tracker.csv")
+```
+Use is.na to filter out the missing values among the Ratings: 
+```{r}
+fit_tracker %>% filter(!is.na(Rating__Out_of_5_))
+
+data <- head(fit_tracker, 10)
+knitr::kable(data,
+ caption = "Fitness Tracker Ecommerce Table")
+```
+Create 5 dataframe for each level of rating, which is out of 5 and exam the behavior in the top two levels to find the distinct characteristics of high-performing products:
+```{r}
+lvl1<- filter(fit_tracker, Rating__Out_of_5_ %in% (0:1))
+lvl2<- filter(fit_tracker, Rating__Out_of_5_ %in% (1:2))
+lvl3<- filter(fit_tracker, Rating__Out_of_5_ %in% (2:3))
+lvl4<- filter(fit_tracker, Rating__Out_of_5_ %in% (3:4))
+lvl5<- filter(fit_tracker, Rating__Out_of_5_ %in% (4:5))
+```
+```{r}
+new_fit_tracker<-fit_tracker %>% group_by(Rating__Out_of_5_) %>% 
+  summarize(Selling_Price=mean(Selling_Price), 
+            Original_Price=mean(Original_Price))
+data <- head(new_fit_tracker, 10)
+knitr::kable(data,
+ caption = "Fitness Tracker Rating vs Price")
+```
+## Analyze
+
+### Examing Daily Steps Dataset
+Using data frame containing dates and step counts of each participant each day. We can exame wether they use fitness trackers to increase their daily activity by increasing their daily steps. 
+
+#### Steps Summary
+The mean of the average steo is 7592 steps per day and it is closer to the maximun step 8731 than minimun step 3482. This correlates to the slight increase we witness in the plot below.  
+```{r}
+summary(new_steps_day)
+```
+
+```{r}
+ggplot(new_steps_day, aes(ActivityDay, mean_step, group=1))+
+  geom_line(color="hot pink")+
+  labs(title="Average Step Count in a Month",subtitle=
+         "average of 30 participants from Month April to May",
+       x="Date", y= "Average Step Count")
+```
+
+In the line plot above, there is no obvious trend, increasing, or decreasing in step counts from April 13th till May 12th. However, there is a hige dip/reduction in avergae step at the end. The data framed was investigated and cleaned. We hypothesize that some participants might have forgot to charge their watch or lost interest/habit of wearing the fitness tracker. We will further investigate the reason behind the dip. The average steps per day for aevrage American is between 3,000 to 4,000 according to [Mayo Clinic](https://www.mayoclinic.org/healthy-lifestyle/fitness/in-depth/10000-steps/art-20317391#:~:text=The%20average%20American%20walks%203%2C000,a%20day%20every%20two%20weeks.). The trend line is fluctuation mostly ranging from 7,000 to 8,000 steps per day on average. We do see a higher than average steps per day with participants wearing the FitBit device. However, there could be experimenter effect as a confounding variable, so replication of the survey is needed. We could assume the device did help the participant walk more for now.
+
+### Examing Calories Dataset
+This section is to investigate whether the participants used the fitness trackers to reduce their calorie intake and maintain a healthier diet.
+#### Calories Summary
+Since the mean and median are more than 100 calories apart will be using the median calorie 2331 as the representation of the peak of the distribution curve. The median calories per day is closer to the first quartile 2285 than the third quartile 2383, thus we would be expecting a slight right skewed distribution if we plotted one, which means most of the calories are in the reasonable range. According to [WHO](https://www.who.int/news-room/fact-sheets/detail/healthy-diet#:~:text=For%20adults&text=Less%20than%2010%25%20of%20total%20energy%20intake%20from%20free%20sugars,additional%20health%20benefits%20(7).), a healthy person should consume approximately 2000 calories per day. According to [Mayo Clinic](https://www.mayoclinic.org/healthy-lifestyle/weight-loss/in-depth/calories/art-20048065#:~:text=In%20general%2C%20if%20you%20cut,your%20gender%20and%20activity%20level.), one needs to cut 500 calories per day from normal diet to lose weight.
+```{r}
+summary(new_calories)
+```
+The calories ranges from 2287 to 2454 which is in the accepted range for a healthy person. The outlier minimun value 1259 and other outliers less than 2285 were removed, because even if the participants wanted to lose weight at the end of the survey period, cutting approximately 1000 calories is not sustainable. We see a drop in average calories consumed around April 11th and April 24th and a huge growth around May 2nd. Overall there is not correlation between increasing days and calories consumsion. Thus, we can hypothesize that the users did use Fitbit to watch their calories but not for weight loss purposes. We can further investigate in the WeightLog section below.
+```{r}
+ggplot(new_calories, aes(ActivityDay, mean_calorie))+
+  geom_line(color="dark green")+
+  labs(title="Average Calories Consumed per Day", 
+       subtitle="Generated among 30 participants from April to May",
+       x="Date", y="Average Calories Consumed")
+```
+
+### Examing Acitivty Intensity Dataset
+#### Intensity Summary
+Average sedentary minutes have the highest average of 986.4 min, while lightly active minutes have an average of 191.57 min, fairly active minutes is 13.5 min, with very active minutes average being 20.96 min. 
+```{r}
+summary(new_intensity)
+```
+```{r}
+data_ggp <- data.frame(x = new_intensity$ActivityDay,
+                       y = c(new_intensity$mean_sit_min, 
+                             new_intensity$mean_lit_min, 
+                             new_intensity$mean_fair_min, 
+                             new_intensity$mean_act_min), 
+group = c(rep("mean_sit_min", nrow(new_intensity)),
+rep("mean_lit_min", nrow(new_intensity)),
+rep("mean_fair_min", nrow(new_intensity)),
+rep("mean_act_min", nrow(new_intensity))))
+```
+Below is the graph of all average minutes. All three levels of activity are all steady and there is no sign of increase or decrease in average minutes, nor were there any crossovers of trend lines. 
+```{r}
+ggplot(data_ggp, aes(x,y,col=group)) + geom_line()+labs(title="Average Minutes of Levels of Activity Intensity", X="Date", y="Time(min")
+```
+
+Using geom_smooth() function we obtained curves that shows the correlation of each plot. We see a strong correlation between the plots among the same level and little to no fluctuation in the trend lines. From the observation, we can hypothesize that the Fitbit device were slightly effective in reducing the sedentary minutes while having no effect on other three higher activity levels.
+```{r}
+ggplot(data_ggp, aes(x,y,col=group)) + geom_line()+geom_smooth()+labs(title="Average Minutes of Levels of Activity Intensity", X="Date", y="Time(min")
+```
+
+```{r}
+act_lvl <- c(986, 192, 13.5, 21)
+piepercent <- round (100* (act_lvl/sum(act_lvl)),1 )
+pie_v2 <- pie(act_lvl, labels=piepercent, cex=0.7, main="Activity Level Average Minute Percent Distribution", col=rainbow(length(act_lvl)) )
+legend("topright", c("Sedentary","Lightly Active", "Fairly Active", "Very Active"),
+       cex = 0.7, fill = rainbow(length(act_lvl)))
+```
+
+Above is a pie chart further visualize the distribution of different in active level, and we can see that on average among the whole time wearign the device the users are 81.3% sedentary, 15.8% lightly active, 1.1% fairly active, and 1.7% very active. One thing to notice is the percent of very active is 0.6% more than fairly active minutes and it was made more obvious by the pie chart. However, since there is no crossover nor fluctuation in the two bottom trend lines in the line plot. We can't assume the device have any effect on increasing the active minutes.
+
+### Examing WeightLog Dataset
+#### WeightLog Summary
+The mean_BMI column of the dataset has a mean BMI of 25.00. According to [CDC](https://www.cdc.gov/healthyweight/assessing/bmi/adult_bmi/index.html) for male and female over the age of 20, the range for healthy BMI is between 18.5 to 24.9. The minimum average BMI of the dataset is 23.7 and the average maximum BMI is 32.40, which are both on a larger side of the scale. 
+```{r}
+summary(new_weight)
+```
+In the line graph below, we can see the top line being the change in weight through out the survey period and the bottom red line is the change in BMI. There is a steady decrease in weight and BMI through out the time with a slight increase in weight in the middle. Same trend is spotted for both plots.
+*In Pounds:*
+```{r}
+data_ggplot <- data.frame(x = new_weight$DATE,
+                       y = c(new_weight$mean_pounds, 
+                             new_weight$mean_BMI), 
+                       group = c(rep("mean_pounds", nrow(new_weight)),
+                                 rep("mean_BMI", nrow(new_weight))))
+ggplot(data_ggplot, aes(x,y,col=group)) + geom_line() 
+```
+*In kilograms:*
+```{r}
+data_ggplot1 <- data.frame(x = new_weight$DATE,
+                          y = c(new_weight$mean_kg, 
+                                new_weight$mean_BMI), 
+                          group = c(rep("mean_kg", nrow(new_weight)),
+                                    rep("mean_BMI", nrow(new_weight))))
+ggplot(data_ggplot1, aes(x,y,col=group)) + geom_line() 
+```
+
+
+bar graphs:
+```{r}
+bar_weight <- weight %>% group_by(DATE) %>% summarize(mean_kg=mean(WeightKg),
+mean_pounds=mean(WeightPds), mean_BMI=mean(BMI), IsManualReport) 
+```
+```{r}
+bar_weight %>% ggplot()+geom_col( aes(x=DATE, y=mean_pounds, fill=IsManualReport))+
+  labs(title="Avergae Weight Change during a Month", subtitle="differentiate by Report Method", y="Weight(Pds)")
+```
+```{R}
+sum(weight$IsManualReport=="False")
+sum(weight$IsManualReport=="True")
+```
+Above is a bar graph showing the change in weight with each bar distinguished by the amount of results being self-reported or wifi-reported. There are 41 self-reported and 25 wifi-reported results. We can assume the self-reporting participants would be more conscious of the change in their weight and have more drive to be healthier and reduce their BMI. However, having two different reporting method can create a confounding variable which could cause the result not applicable to the whole population.
+
+### Examning DailySleep Dataset
+#### Sleep Summary
+The difference bewtween the minimum, mean, and maximum time in bed and minutes asleep are approximately the same. The participants spent an average of 458.8 minutes in bed and 420.1 minutes asleep. The average time asleep is more than the average american time asleep, 408 minutes. 
+```{r}
+summary(new_sleep)
+```
+Below is the line graph showing the relationship between the time in bead and the time asleep. We can see that the gap between the two lines have been fluctuating but not closing at the end of the survey period, which means the sleep quality was not increase while wearing the FitBit device, but the time asleep is overall higher than the average Americans sleeping [6.8 hours](https://news.gallup.com/poll/166553/less-recommended-amount-sleep.aspx).
+
+```{r}
+data_ggp <- data.frame(x = new_sleep$DATE,
+                       y = c(new_sleep$mean_asleep, 
+                             new_sleep$mean_inbed), 
+                       group = c(rep("mean_asleep", nrow(new_sleep)),
+                                 rep("mean_inbed", nrow(new_sleep))))
+ggplot(data_ggp, aes(x,y,col=group)) + geom_line() +
+  labs(title="Comparison between Time in Bed vs. Time Asleep", x="Date", y="Time(min)")
+```
+
+Below is a stacked bar graph showing the ratio of time asleep out of the time in bed. We can see that most of the time is spent asleep, so we can also assume that the participants have sufficient sleep quality on average and would not have the need for better sleep quality. This requires further investigation on the sleep quality change of other FitBit users.
+```{r}
+percent_sleep<- data.frame(new_sleep$DATE, asleep=c(new_sleep$mean_asleep/new_sleep$mean_inbed),
+                           sleep=c(new_sleep$mean_inbed-new_sleep$mean_asleep)/new_sleep$mean_inbed)
+data <- data.frame(col1=c(percent_sleep$new_sleep.DATE),
+                   Inbed=c(percent_sleep$sleep),
+                   asleep=c(percent_sleep$asleep))
+data_mod1 <- cbind(data[1], stack(data[2:3]))
+data_mod1 %>% ggplot()+ geom_col(aes(x=col1, y=values, fill=ind))+
+  labs(title="Time in Bed vs. Time Asleep Ratio in Percentage", x="Date", y="Time(min)")
+```
+
+### Examing Fitness Tracker Dataset
+#### Fitness Tracker Ecommerce Summary
+The two types of prices are both in Indian rupee. One US dollar is equivalent to approximately 80 rupees. Since the medians and means are quite far apart, we will be using the medians as representations of mean. The average selling price is approximately $187, and the original price is approximately $237. 
+```{r}
+fit_tracker1<-select(fit_tracker, Selling_Price, Original_Price, Rating__Out_of_5_)
+summary(fit_tracker1)
+```
+
+```{r}
+lvl4 %>% ggplot()+geom_bar(aes(x=Brand_Name), fill="Violet")+
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))+
+  labs(title="Count of Brands with Rating Above Three", x="Brands")
+```
+
+The bar chart above compares the number of each brand's device that has a rating more than three. Fossil's devices have the most ratings above 3 and less than 4, Fire-Boltt is secon and realme being the third most with high ratings.
+```{r}
+lvl5 %>% ggplot()+geom_bar(aes(x=Brand_Name), fill="Violet")+
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))+
+  labs(title="Count of Brands with Rating Above Four", x="Brands")
+```
+Above is the bar chart also comparing the amount of device having a rating over 4 and below 5. Fossil once again has the most device with ratings over 4, while Fire-Boltt and GARMIN both come in second, and realme being the third.
+```{r}
+lvl5 %>% ggplot()+geom_bar(aes(x=Color), fill="blue")+
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))+
+  labs(title="Count of Colors with Rating Above Four", x="Color")
+```
+Above is the bar chart showing the colors of device that have the highest ratings. Black is the most popular. with silver being second, and blue being the third most popular color. Follow by gold, grey and white.
+```{r}
+fit_tracker %>% ggplot()+geom_col(aes(x=Brand_Name, y=Rating__Out_of_5_), fill="dark Green")+
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))+labs(title="Overview of Ratings vs Brands", x="Brands", y="Ratings")
+```
+
+
+```{r}
+fit_tracker %>% ggplot()+geom_col(aes(x=Strap_Material, y=Rating__Out_of_5_), fill="dark green")+
+  theme(axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1))+labs(title="Ratings vs Strap Material", x="Strap Material", y="Ratings")
+```
+
+The bar chart above compares the popularity of different strap materials. The results show that silicone is the most popular, stainless steel is second, and aluminum being the third most popular.
+
+```{r}
+pie_device <- lvl5 %>% group_by() %>% summarize(pie_watch=sum(lvl5$Device_type=='Smartwatch'), pie_band=sum(lvl5$Device_type=='FitnessBand'))
+
+print(pie_device)
+```
+```{r}
+rating_lvl <- c( 43, 6)
+labels <- c("Smartwatch", "FitnessBand")
+pie_v1 <- pie(rating_lvl, labels, cex=0.7, main="Device Type Distribution for Rating over Four", col=rainbow(length(rating_lvl)) )
+
+```
+
+Next, we compare the popularity between Smartwatch and FitnessBand. Smartwatch did show up more in the higher ratings. However, Smartwatch is the dominant device type among the two in general, thus we can't make an assumption based on this observation. More investigation in different parts of the world is needed.
+
+```{r}
+
+
+data_ggpp <- data.frame(x = new_fit_tracker$Rating__Out_of_5_,
+                       y = c(new_fit_tracker$Selling_Price, 
+                             new_fit_tracker$Original_Price), 
+                       group = c(rep("Selling_Price", nrow(new_fit_tracker)),
+                                 rep("Original_Price", nrow(new_fit_tracker))))
+ggplot(data_ggpp, aes(x,y,col=group)) + geom_line()+
+  labs(title="Rating vs Price of Device", subtitle="Take average of the price based on Ratings", x="Rating (out of 5)", y="Price")
+```
+
+The geom_line plot above show is the trend between price and rating. We inclued the original price and selling price and from the plot we can tell the gap between the original price and selling price are not that big for most ratings beside ratings from 3.5 to 4.5. The bigger gap between the two ratings tell us that some sale could be applied to the devices and the ratings might not be as high for these products if the selling price is the same or close to the original price. On the other hand, the highest ratings products have almost the same original and selling prices but still got the higher rating. There is a trend of increase of ratings as the price increases. We can assume that low price doesn't garantee good ratings becasue people are much happier to pay more to get the features and capacity up to their standards. 
+
+## Share
+make presentation
+
+## Act
+1. What are some trends in smart device usage?
+2. How could these trends apply to Bellabeat customers?
+3. How could these trends help influence Bellabeat marketing strategy？
+
+### Observations:
+
+- Overall steps per day for participants are more than average Americans. 
+- Participants use device to watch calories intake but not reduce calories intake.
+- Device help reduce sedentary minutes but not increase active minutes.
+- Should have a uniformed report method. Obvious weight loss or gain were not observed.
+- Spend most of the time asleep so FitBit does help with increasing sleep.
+- Fossil and Fire-boltt dominate among the high ratings. 
+- Black, blue, silver are the most popular colors. 
+- Fossil, Apple, and FitBit have overall highest ratings. 
+- Silicone, stainless steel, aluminum are top three favorite strap materials. 
+- Costumers are willing to pay more for good quality products with good ratings. Ratings and Price have a positive correlations.
+
+### Marketing Recommendations:
+
+- Add features to enable using personally surveying tools like weekly emails to create a semi-customized workout/activity schedule in the Bellabeat app.
+- Encourage users to use WIFI-scale report to report weight in order to get more accurate and uniformed data. 
+- Leaf trackers can increase steps by adding engaging games that involve meaningful prize. Can collaborate with charity to improve the brand image.  
+- Using Leaftracker, Bellabeat app, and Spring water bottle to create an environment that promotes healthy diet and help monitor water and calorie intake. 
+- Leaf trackers can use buzzes and reminders to remind the users to stand after long sedentary hours. 
+- Time can include features to guide and teaches users how to meditate before bed to improve sleep quality. Include different time and levels of meditation.
+- Investigate into what features and characteristics that make Fossil, Apple, and FitBit such sucessful brands and learn from them.
+- Make band straps with different materials available and make sure to include silicone, stainless steel, and aluminum straps. 
+- Advertise and create a product imgae of good quality fitness devices carefully crafted by professionals. 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

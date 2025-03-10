@@ -1,0 +1,26 @@
+---
+title: "Bellabeat Project1"
+author: "Ciby Lin"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+# start of calories per day analysis
+  
+calories <- read.csv2("DailyCalories_v2.csv")
+as.Date(steps_day$ActivityDay,format="%m%d%y")
+
+calories_cleaned <- calories %>% filter(Calories !=0) %>% 
+  arrange(ActivityDay)
+
+new_calories<- calories_cleaned %>% group_by(ActivityDay) %>% 
+  summarize(mean_calorie=mean(Calories))
+
+ggplot(new_calories, aes(ActivityDay, mean_calorie))+
+  geom_line(color="dark green")+
+  labs(title="Average Calories Consumed per Day", 
+       subtitle="Generated among 30 participants from April to May",
+       x="Date", y="Average Calories Consumed")
+#need more investigation into the dip at the end of the plot
+```
